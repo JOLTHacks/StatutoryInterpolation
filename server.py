@@ -7,6 +7,14 @@ app = Flask(__name__)
 def getTitles():
     return jsonify([18])
 
+@app.route('/getTitle/<int:title>')
+def getTitle(title):
+    return jsonify([title])
+
+@app.route('/getDiffs')
+def getDiffs():
+    return jsonify([18])
+
 if __name__ == '__main__':
     # Bind to PORT if defined, otherwise default to 5000.
     port = int(os.environ.get('PORT', 5000))
