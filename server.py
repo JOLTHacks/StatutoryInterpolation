@@ -3,7 +3,7 @@ from flask import jsonify, Flask
 
 app = Flask(__name__)
 
-@app.route('getTitles')
+@app.route('/getTitles')
 def getTitles():
     return jsonify([18])
 
