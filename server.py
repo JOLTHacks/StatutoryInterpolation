@@ -6,6 +6,7 @@ from flask import jsonify, Flask, request
 
 ## Project imports
 from lib.constants import *
+from lib.server_init import *
 import lib.structure
 
 app = Flask(__name__)
@@ -36,5 +37,6 @@ if __name__ == '__main__':
     # Startup file load goes here.
     # Probably add some logging too.
     # Bind to PORT if defined, otherwise default to 5000.
+    load_diffs()
     port = int(os.environ.get('PORT', Server.PORT))
     app.run(host=Server.HOST, port=port, debug=debug)
