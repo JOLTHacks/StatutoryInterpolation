@@ -6,15 +6,17 @@ from flask import jsonify, Flask, request
 
 ## Project imports
 from lib.constants import *
-from lib.server_init import *
+from lib.logic import *
 import lib.structure
 
 app = Flask(__name__)
 debug = True
 
+us_code = {}
+
 @app.route('/getTitles')
 def getTitles():
-    return jsonify([18])
+    return jsonify({'titles': [12]})
 
 @app.route('/getTitle', methods=['GET'])
 def getTitle():
@@ -25,8 +27,11 @@ def getTitle():
 
     if API.TITLE_KEY not in data:
         return jsonify(data)
-    
-    return jsonify(data[API.TITLE_KEY])
+
+    if data[API.TITLE_KEY] not in us_code:
+        return jsonify(data)
+
+    return jsonify(us_code[data[API.TITLE_KEY]])
 
 @app.route('/getDiffs', methods=['GET', 'POST'])
 def getDiffs():
@@ -37,6 +42,6 @@ if __name__ == '__main__':
     # Startup file load goes here.
     # Probably add some logging too.
     # Bind to PORT if defined, otherwise default to 5000.
-    load_diffs()
+    us_code = load_diffs()
     port = int(os.environ.get('PORT', Server.PORT))
     app.run(host=Server.HOST, port=port, debug=debug)
