@@ -16,10 +16,11 @@ class DiffType(Enum):
 class Structure():
     """A path to an arbitrary portion of the U.S. Code.
     Recursive data structure."""
-    def __init__(self, section, representation, text=None, subsections=[]):
+    def __init__(self, section, representation, text=None, diffs=[], subsections=[]):
         self.section = section
         self.representation = representation
         self.text = text
+        self.diffs = diffs
         self.subsections = subsections
 
     def has_children():
