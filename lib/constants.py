@@ -1,3 +1,10 @@
+## Server Values ##
+
+class Server:
+    HOST = '0.0.0.0'
+    PORT = 5000
+
 ## API Values ##
 
-TITLE_KEY = 'title'
+class API:
+    TITLE_KEY = 'title'

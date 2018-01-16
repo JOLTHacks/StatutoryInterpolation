@@ -5,7 +5,8 @@ import flask, json, os
 from flask import jsonify, Flask, request
 
 ## Project imports
-from lib import constants, structure
+from lib.constants import *
+import lib.structure
 
 app = Flask(__name__)
 debug = True
@@ -21,10 +22,10 @@ def getTitle():
     except:
         data = {}
 
-    if constants.TITLE_KEY not in data:
+    if API.TITLE_KEY not in data:
         return jsonify(data)
     
-    return jsonify(data[constants.TITLE_KEY])
+    return jsonify(data[API.TITLE_KEY])
 
 @app.route('/getDiffs', methods=['GET', 'POST'])
 def getDiffs():
@@ -35,5 +36,5 @@ if __name__ == '__main__':
     # Startup file load goes here.
     # Probably add some logging too.
     # Bind to PORT if defined, otherwise default to 5000.
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    port = int(os.environ.get('PORT', Server.PORT))
+    app.run(host=Server.HOST, port=port, debug=debug)
