@@ -9,3 +9,9 @@ Server setup:
 3. pip install enum
 4. export FLASK_APP=server.py (set on windows)
 5. flask run
+
+Running tests:
+1. Navigate to parent directory of test.
+2. python -m parent_directory.test_file.
+
+Please note that when writing tests, all tests must begin with "test_".

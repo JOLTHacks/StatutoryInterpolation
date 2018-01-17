@@ -17,3 +17,13 @@ def print_structure(structure, depth=0):
         return
     for s in structure.subsections:
         print_structure(s, depth=depth+1)
+
+## Utility methods
+
+SHORTTIME_FORMAT = '%Y%m%d'
+
+def shorttime_to_datetime(string):
+    return datetime.datetime.strptime(string, SHORTTIME_FORMAT)
+
+def datettime_to_shorttime(date):
+    return date.strftime(SHORTTIME_FORMAT)
