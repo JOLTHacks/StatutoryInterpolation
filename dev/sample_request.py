@@ -5,22 +5,29 @@ def getTitles():
     print r, r.text
 
 def getTitle():
+    title = raw_input('Title: ')
     r = requests.request(method='get', url='http://127.0.0.1:5000/getTitle',\
+                     data='{"title": %s}' % title)
+    print r, r.text
+
+def getDiffs():
+    r = requests.request(method='get', url='http://127.0.0.1:5000/getDiffs',\
                      data='{"title": 10}')
     print r, r.text
 
-methods = ["getTitles", "getTitle"]
-method_name_to_method = {"getTitles" : getTitles,
-                         "getTitle" : getTitle}
+methods = ['getTitles', 'getTitle', 'getDiffs']
+method_name_to_method = {'getTitles' : getTitles,
+                         'getTitle' : getTitle,
+                         'getDiffs' : getDiffs}
 
 def print_methods():
     for m in range(len(methods)):
         print "%d: %s" % (m, methods[m])
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     while True:
         print_methods()
-        action = raw_input("Selection: ")
+        action = raw_input('Selection: ')
         valid = True
         try:
             action = int(action)
@@ -30,5 +37,5 @@ if __name__ == "__main__":
         if valid and action < len(methods):
             method_name_to_method[methods[action]]()
         else:
-            print "Invalid selection"
+            print 'Invalid selection'
         

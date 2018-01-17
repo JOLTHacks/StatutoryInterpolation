@@ -1,5 +1,7 @@
 ### Data structures
 from enum import Enum
+from constants import *
+from logic import *
 
 class Representation(Enum):
     NUMERIC = 0
@@ -16,26 +18,6 @@ def num_to_representation(n, r):
         3: lambda x: chr(x + ord('A') - 1),
         4: lambda x: chr(x + ord('a') - 1)
         }[r](n)
-
-def num_to_roman(n, lowercase=False):
-    '''Convert number to roman numerals. Does not handle 0.'''
-    is_negative = False
-    if n < 0:
-        n *= -1
-        is_negative = True
-        
-    values = [1000, 900, 500, 400, 100,90, 50, 40, 10, 9, 5, 4, 1]
-    symbols = {1000:'M', 900:'CM', 500: 'D', 400:'CD', 100:'C', 90:'XC',
-               50:'L', 40:'XL', 10:'X', 9:'IX', 5:'V', 4:'IV', 1:'I'}
-    string = ''
-    for v in values:
-        if n == 0:
-            break
-        x, y = divmod(n, v)
-        string += symbols[v] * x
-        n -= v * x
-
-    return ('-' if is_negative else '') + (string.lower() if lowercase else string)
 
 class DiffType(Enum):
     ADD = 0
@@ -73,11 +55,42 @@ class Structure():
     def short_str(self):
         return "%s %s" % (self.name, num_to_representation(self.section, self.representation))
 
+    def to_json(self):
+        diffs = {}
+        for date in self.diffs:
+            diffs[datetime_to_shorttime(date)] = [diff.to_json() for diff in self.diffs[date]]
+        dates = [datetime_to_shorttime(date) for date in self.dates]
+
+        texts = {}
+        for date in self.texts:
+            texts[datetime_to_shorttime(date)] = self.texts[date]
+
+        subsections = [s.to_json() for s in self.subsections]
+        return {API.STRUCTURE_SECTION: self.section,
+                API.STRUCTURE_REPRESENTATION: self.representation,
+                API.STRUCTURE_NAME: self.name,
+                API.STRUCTURE_DATES: dates,
+                API.STRUCTURE_TEXTS: texts,
+                API.STRUCTURE_DIFFS: diffs,
+                API.STRUCTURE_SUBSECTIONS: subsections}
+
 class Diff():
-    def __init__(self, diff_type, position=0, add='', remove=0, update=None):
+    def __init__(self, diff_type, position=None, add=None, remove=None, update=None):
         self.diff_type = diff_type
         self.position = position
         self.add = add
         self.remove = remove
         self.update = update
+
+    def to_json(self):
+        json = {API.DIFF_TYPE: self.diff_type}
+        if self.position is not None:
+            json[API.DIFF_POSITION] = self.position
+        if self.add is not None:
+            json[API.DIFF_ADD] = self.add
+        if self.remove is not None:
+            json[API.DIFF_REMOVE] = self.remove
+        if self.update is not None:
+            json[API.DIFF_UPDATE] = self.update.to_json()
+        return json
 

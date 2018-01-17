@@ -24,12 +24,6 @@ class RepresentationTest(unittest.TestCase):
     def test_lowercase_representation(self):
         self.assertEqual(num_to_representation(3, Representation.LOWERCASE), 'c')
 
-    def test_num_to_roman(self):
-        values = [1, -1, 5, 9, 18, 23]
-        expected = ['I', '-I', 'V', 'IX', 'XVIII', 'XXIII']
-        for i in range(len(values)):        
-            self.assertEqual(num_to_roman(values[i]), expected[i])
-
 class StructureTest(unittest.TestCase):
     def setUp(self):
         self.date_2011 = datetime.datetime(year=2011, month=1, day=1)
