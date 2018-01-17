@@ -7,9 +7,6 @@ class Server:
 ## API Values ##
 
 class API:
-    ## Outgoing keys
-    GET_TITLES_KEY = 'titles'
-
     STRUCTURE_SECTION = 'section'
     STRUCTURE_REPRESENTATION = 'representation'
     STRUCTURE_NAME = 'name'
@@ -24,5 +21,15 @@ class API:
     DIFF_REMOVE = 'remove'
     DIFF_UPDATE = 'update'
 
-    ## Incoming keys
-    TITLE_KEY = 'title'
+    class KEYS:
+        ## Outgoing
+        GET_TITLES = 'titles'
+
+        ## Incoming
+        TITLE = 'title'
+
+        #### getDiffs()
+        STRUCTURE = 'structure'
+        BEFORE = 'before'
+        AFTER = 'after'
+        DIFF_BEFORE = 'diffBefore'

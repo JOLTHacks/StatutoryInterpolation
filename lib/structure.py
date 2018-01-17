@@ -38,19 +38,26 @@ class Structure():
         self.subsections = subsections
 
     def get_text_at(self, date):
+        subsections = [s.get_text_at(date) for s in self.subsections]
+        structure = Structure(self.section, self.representation, self.name,
+                              subsections=subsections)
+        if not self.has_text():
+            return structure
         if date < self.dates[0]: # Did not exist at this date, may want to handle differently.
             return Structure(self.section, self.representation, self.name)
         closest_date_index = 0
         while closest_date_index + 1 < len(self.dates) and self.dates[closest_date_index+1] < date:
             closest_date_index += 1
         closest_date = self.dates[closest_date_index]
-        subsections = [s.getTextAt(date) for s in self.subsections]
         return Structure(self.section, self.representation, self.name,
                          [closest_date], {closest_date: self.texts[closest_date]},
                          {closest_date: self.diffs[closest_date]}, subsections)
 
     def has_children(self):
         return len(self.subsections) > 0
+
+    def has_text(self):
+        return len(self.dates) > 0 and len(self.texts) > 0
 
     def short_str(self):
         return "%s %s" % (self.name, num_to_representation(self.section, self.representation))
@@ -66,13 +73,18 @@ class Structure():
             texts[datetime_to_shorttime(date)] = self.texts[date]
 
         subsections = [s.to_json() for s in self.subsections]
-        return {API.STRUCTURE_SECTION: self.section,
+        json = {API.STRUCTURE_SECTION: self.section,
                 API.STRUCTURE_REPRESENTATION: self.representation,
-                API.STRUCTURE_NAME: self.name,
-                API.STRUCTURE_DATES: dates,
-                API.STRUCTURE_TEXTS: texts,
-                API.STRUCTURE_DIFFS: diffs,
-                API.STRUCTURE_SUBSECTIONS: subsections}
+                API.STRUCTURE_NAME: self.name}
+        if len(dates) > 0:
+            json[API.STRUCTURE_DATES] = dates
+        if len(texts) > 0:
+            json[API.STRUCTURE_TEXTS] = texts
+        if len(diffs) > 0:
+            json[API.STRUCTURE_DIFFS] = diffs
+        if len(subsections) > 0:
+            json[API.STRUCTURE_SUBSECTIONS] = subsections
+        return json
 
 class Diff():
     def __init__(self, diff_type, position=None, add=None, remove=None, update=None):

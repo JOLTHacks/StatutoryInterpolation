@@ -17,7 +17,7 @@ us_code = load_diffs() ## Doesn't work if put in run block below.
 
 @app.route('/getTitles')
 def getTitles():
-    return jsonify({API.GET_TITLES_KEY: us_code.keys()})
+    return jsonify({API.KEYS.GET_TITLES: us_code.keys()})
 
 @app.route('/getTitle', methods=['GET'])
 def getTitle():
@@ -26,20 +26,33 @@ def getTitle():
     except:
         data = {}
 
-    if API.TITLE_KEY not in data:
+    if API.KEYS.TITLE not in data:
         ## Bad request
         return jsonify(data)
 
-    if data[API.TITLE_KEY] not in us_code:
+    if data[API.KEYS.TITLE] not in us_code:
         ## Missing data
         return jsonify(data)
 
-    return jsonify(us_code[data[API.TITLE_KEY]].to_json())
+    return jsonify(us_code[data[API.KEYS.TITLE]].to_json())
 
 @app.route('/getDiffs', methods=['GET', 'POST'])
 def getDiffs():
-    request_json = request.get_json(silent=not debug)
-    return jsonify([18])
+    ## Refactor this and above.
+    try:
+        data = json.loads(request.data)
+    except:
+        data = {}
+
+    if API.KEYS.TITLE not in data:
+        ## Bad request
+        return jsonify(data)
+
+    if data[API.KEYS.TITLE] not in us_code:
+        ## Missing data
+        return jsonify(data)
+    
+    return jsonify(us_code[12].get_text_at(datetime.datetime.now()).to_json())
 
 if __name__ == '__main__':
     # Startup file load goes here.

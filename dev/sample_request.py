@@ -12,7 +12,7 @@ def getTitle():
 
 def getDiffs():
     r = requests.request(method='get', url='http://127.0.0.1:5000/getDiffs',\
-                     data='{"title": 10}')
+                     data='{"title": 12}')
     print r, r.text
 
 methods = ['getTitles', 'getTitle', 'getDiffs']
