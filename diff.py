@@ -1,5 +1,17 @@
 # StatutoryInterpolation
 # Diff.py
+from html.parser import HTMLParser
+
+
+class USCParser(HTMLParser):
+    def handle_starttag(self, tag, attrs):
+        print("Encountered a start tag:", tag)
+
+    def handle_endtag(self, tag):
+        print("Encountered an end tag :", tag)
+
+    def handle_data(self, data):
+        print("Encountered some data  :", data)
 
 
 def diff(s1, s2):
@@ -45,3 +57,7 @@ def diff(s1, s2):
             if x >= n and y >= m:
                 print D
                 return path[n][m]
+
+
+def parse(fname):
+    readfile = open(fname, 'r')
