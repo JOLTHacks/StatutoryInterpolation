@@ -1,17 +1,29 @@
 # StatutoryInterpolation
 # Diff.py
-from html.parser import HTMLParser
+from HTMLParser import HTMLParser
 
 
 class USCParser(HTMLParser):
+    def __init__(self):
+        HTMLParser.__init__(self)
+        self.list = []
+
     def handle_starttag(self, tag, attrs):
-        print("Encountered a start tag:", tag)
+        print "Encountered a start tag:", tag
 
     def handle_endtag(self, tag):
-        print("Encountered an end tag :", tag)
+        print "Encountered an end tag :", tag
 
     def handle_data(self, data):
-        print("Encountered some data  :", data)
+        print "Encountered some data  :", data
+        for dstr in data.split():
+            self.list.append(dstr)
+
+    def handle_comment(self, data):
+        print "Encountered a comment :", data
+
+    def get_list(self):
+        return self.list
 
 
 def diff(s1, s2):
@@ -61,3 +73,11 @@ def diff(s1, s2):
 
 def parse(fname):
     readfile = open(fname, 'r')
+    parser = USCParser()
+    parser.feed(readfile.read())
+    return parser.get_list()
+
+def test(fname1, fname2):
+    l1 = parse(fname1)
+    l2 = parse(fname2)
+    return diff(l1, l2)
