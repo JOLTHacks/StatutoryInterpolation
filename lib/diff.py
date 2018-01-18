@@ -6,29 +6,37 @@ from HTMLParser import HTMLParser
 class USCParser(HTMLParser):
     def __init__(self):
         HTMLParser.__init__(self)
-        self.list = []
+        self.start = 0
+        self.dict = {}
+        self.path = ''
 
-    def handle_starttag(self, tag, attrs):
-        print "Encountered a start tag:", tag
+    #def handle_starttag(self, tag, attrs):
+    #    print "Encountered a start tag:", tag
 
-    def handle_endtag(self, tag):
-        print "Encountered an end tag :", tag
+    #def handle_endtag(self, tag):
+    #    print "Encountered an end tag :", tag
 
     def handle_data(self, data):
-        print "Encountered some data  :", data
+        #print "Encountered some data  :", data
         for dstr in data.split():
-            self.list.append(dstr)
+            if self.start:
+                self.dict[self.path].append(dstr)
 
     def handle_comment(self, data):
-        print "Encountered a comment :", data
+        if 'itempath' in data:
+            self.path = data.split(' itempath:')[1].rstrip()
+            self.start = 1
+            if self.path not in self.dict:
+                self.dict[self.path] = []
+        #print "Encountered a comment :", data
 
-    def get_list(self):
-        return self.list
+    def get_dict(self):
+        return self.dict
 
 
 def diff(s1, s2):
     """Apply the Myers algorithm to generate a diff chart for 2 strings or 2 lists of words."""
-
+    # TODO: Implement Copy Functionality to Supplement Insertions and Deletions.
     # Initialize MAX and V as laid out in Figure 2 of the Myers Paper
     # Also initialize 2D array for tracking the optimal path to each node
     n = len(s1)
@@ -72,12 +80,42 @@ def diff(s1, s2):
 
 
 def parse(fname):
+    """Parse an HTML file for a title of the US Code into a dictionary of lists of words organized by path."""
+    # TODO: Handle Special Characters
     readfile = open(fname, 'r')
     parser = USCParser()
+    #parser.feed(parser.unescape(readfile.read()))
     parser.feed(readfile.read())
-    return parser.get_list()
+    #for key in parser.get_dict():
+    #    print key
+    return parser.get_dict()
 
-def test(fname1, fname2):
-    l1 = parse(fname1)
-    l2 = parse(fname2)
+
+def sectiondiff(fname1, fname2, sec):
+    # TODO: Extend to Chapters, Parts, Title?
+    # TODO: How Do We Handle Changes to Section Number Between Versions?
+    # TODO: Handle Sections that End with Letters and Section Ranges (# To #)
+    d1 = parse(fname1)
+    d2 = parse(fname2)
+
+    l1 = []
+    l2 = []
+
+    for key in d1:
+        if key.endswith('Sec. ' + str(sec)):
+            l1 = list(d1[key])
+            break
+        elif 'Secs. ' in key:
+            if (' ' + str(sec) + ' ') in key or (' ' + str(sec) + ',') in key or key.endswith(' ' + str(sec)):
+                l1 = list(d1[key])
+                break
+    for key in d2:
+        if key.endswith('Sec. ' + str(sec)):
+            l2 = list(d2[key])
+            break
+        elif 'Secs. ' in key:
+            if (' ' + str(sec) + ' ') in key or (' ' + str(sec) + ',') in key or key.endswith(' ' + str(sec)):
+                l2 = list(d2[key])
+                break
+
     return diff(l1, l2)
