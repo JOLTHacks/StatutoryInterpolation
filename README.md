@@ -7,8 +7,9 @@ Server setup:
 1. install pip
 2. pip install flask
 3. pip install enum
-4. export FLASK_APP=server.py (set on windows)
-5. flask run
+4. pip install requests (optional; for dev tool)
+5. export FLASK_APP=server.py (set on windows)
+6. flask run
 
 Running tests:
 1. Navigate to parent directory of test.
