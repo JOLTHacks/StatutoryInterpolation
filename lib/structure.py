@@ -1,9 +1,9 @@
 ### Data structures
-from enum import Enum
+from enum import IntEnum
 from constants import *
 from logic import *
 
-class Representation(Enum):
+class Representation(IntEnum):
     NUMERIC = 0
     ROMAN = 1
     SMALL_ROMAN = 2
@@ -19,7 +19,7 @@ def num_to_representation(n, r):
         4: lambda x: chr(x + ord('a') - 1)
         }[r](n)
 
-class DiffType(Enum):
+class DiffType(IntEnum):
     ADD = 0
     REMOVE = 1
     UPDATE = 2
