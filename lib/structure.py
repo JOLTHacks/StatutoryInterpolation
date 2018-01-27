@@ -3,22 +3,6 @@ from enum import IntEnum
 from constants import *
 from logic import *
 
-class Representation(IntEnum):
-    NUMERIC = 0
-    ROMAN = 1
-    SMALL_ROMAN = 2
-    UPPERCASE = 3
-    LOWERCASE = 4
-
-def num_to_representation(n, r):
-    return {
-        0: lambda x: x,
-        1: lambda x: num_to_roman(x),
-        2: lambda x: num_to_roman(x, lowercase=True),
-        3: lambda x: chr(x + ord('A') - 1),
-        4: lambda x: chr(x + ord('a') - 1)
-        }[r](n)
-
 class DiffType(IntEnum):
     ADD = 0
     REMOVE = 1
@@ -28,10 +12,10 @@ class Structure():
     """A path to an arbitrary portion of the U.S. Code.
     Recursive data structure."""
     # May want to add text, diff for single-time Structure representation
-    def __init__(self, section, representation, name, dates=[], texts={}, diffs={}, subsections=[]):
-        self.section = section
-        self.representation = representation
+    def __init__(self, name, section, order, dates=[], texts={}, diffs={}, subsections=[]):
         self.name = name
+        self.section = section
+        self.order = order
         self.dates = dates # Invariant: should be sorted
         self.texts = texts
         self.diffs = diffs
@@ -39,17 +23,17 @@ class Structure():
 
     def get_text_at(self, date):
         subsections = [s.get_text_at(date) for s in self.subsections]
-        structure = Structure(self.section, self.representation, self.name,
+        structure = Structure(self.name, self.section, self.order,
                               subsections=subsections)
         if not self.has_text():
             return structure
         if date < self.dates[0]: # Did not exist at this date, may want to handle differently.
-            return Structure(self.section, self.representation, self.name)
+            return Structure(self.name, self.section, self.order)
         closest_date_index = 0
         while closest_date_index + 1 < len(self.dates) and self.dates[closest_date_index+1] < date:
             closest_date_index += 1
         closest_date = self.dates[closest_date_index]
-        return Structure(self.section, self.representation, self.name,
+        return Structure(self.name, self.section, self.order,
                          [closest_date], {closest_date: self.texts[closest_date]},
                          {closest_date: self.diffs[closest_date]}, subsections)
 
@@ -60,7 +44,7 @@ class Structure():
         return len(self.dates) > 0 and len(self.texts) > 0
 
     def short_str(self):
-        return "%s %s" % (self.name, num_to_representation(self.section, self.representation))
+        return "%s %s" % (self.name, self.section)
 
     def to_json(self):
         diffs = {}
@@ -73,9 +57,9 @@ class Structure():
             texts[datetime_to_shorttime(date)] = self.texts[date]
 
         subsections = [s.to_json() for s in self.subsections]
-        json = {API.STRUCTURE_SECTION: self.section,
-                API.STRUCTURE_REPRESENTATION: self.representation.value,
-                API.STRUCTURE_NAME: self.name}
+        json = {API.STRUCTURE_NAME: self.name,
+                API.STRUCTURE_SECTION: self.section,
+                API.STRUCTURE_ORDER: self.order}
         if len(dates) > 0:
             json[API.STRUCTURE_DATES] = dates
         if len(texts) > 0:

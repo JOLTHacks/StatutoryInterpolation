@@ -7,9 +7,9 @@ class Server:
 ## API Values ##
 
 class API:
-    STRUCTURE_SECTION = 'section'
-    STRUCTURE_REPRESENTATION = 'representation'
     STRUCTURE_NAME = 'name'
+    STRUCTURE_SECTION = 'section'
+    STRUCTURE_ORDER = 'order'
     STRUCTURE_DATES = 'dates'
     STRUCTURE_TEXTS = 'texts'
     STRUCTURE_DIFFS = 'diffs'
