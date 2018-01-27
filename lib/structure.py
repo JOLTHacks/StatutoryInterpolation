@@ -74,7 +74,7 @@ class Structure():
 
         subsections = [s.to_json() for s in self.subsections]
         json = {API.STRUCTURE_SECTION: self.section,
-                API.STRUCTURE_REPRESENTATION: self.representation,
+                API.STRUCTURE_REPRESENTATION: self.representation.value,
                 API.STRUCTURE_NAME: self.name}
         if len(dates) > 0:
             json[API.STRUCTURE_DATES] = dates
@@ -95,7 +95,7 @@ class Diff():
         self.update = update
 
     def to_json(self):
-        json = {API.DIFF_TYPE: self.diff_type}
+        json = {API.DIFF_TYPE: self.diff_type.value}
         if self.position is not None:
             json[API.DIFF_POSITION] = self.position
         if self.add is not None:
