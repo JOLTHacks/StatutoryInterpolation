@@ -1,8 +1,39 @@
 ## Run-once server load methods.
+from constants import *
 from structure import DiffType, Diff, Structure
-import datetime
+import datetime, logic
 
-def load_diffs():
+class LoadingDiff():
+    """An intermediary diff used only when loading from files."""
+    def __init__(self, path, date, diff):
+        self.path = path
+        self.date = date
+        self.diff = diff
+
+    def __str__(self):
+        return '%s @ %s - %s' % (self.path, str(self.date), str(self.diff))
+
+def construct_loading_diff(s):
+    parts = s.split(',')
+    path = parts[0].split(BACKEND.US_CODE_PATH_DELIMITER)
+    date = logic.shorttime_to_datetime(parts[1])
+    diff_type = DiffType(int(parts[2]))
+    position = int(parts[3])
+    add = parts[4]
+    remove = int(parts[5])
+    link = parts[6].split(BACKEND.US_CODE_PATH_DELIMITER)
+    return LoadingDiff(path, date, Diff(diff_type, position, add, remove, link))
+
+def read_diffs(src):
+    file_ = open(src, 'r')
+    return [construct_loading_diff(line) for line in file_.readlines()]
+
+def load_diffs(src):
+    ## Assume there is some existing code structure
+    # structure = Structure(
+    loading_diffs = read_diffs(src)
+    for diff in loading_diffs:
+        print str(diff)
     date_2011 = datetime.datetime(year=2011, month=1, day=1)
     date_2012 = datetime.datetime(year=2012, month=1, day=1)
     diff_2012 = [Diff(DiffType.ADD, position=4, add='u'),

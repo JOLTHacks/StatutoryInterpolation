@@ -37,6 +37,8 @@ class Structure():
                          [closest_date], {closest_date: self.texts[closest_date]},
                          {closest_date: self.diffs[closest_date]}, subsections)
 
+    #def add_text_at(self, path, text):
+
     def has_children(self):
         return len(self.subsections) > 0
 
@@ -87,6 +89,13 @@ class Diff():
         if self.remove is not None:
             json[API.DIFF_REMOVE] = self.remove
         if self.update is not None:
-            json[API.DIFF_UPDATE] = self.update.to_json()
+            ## TODO(kxia): update this once the link structure is tied down
+            try:
+                json[API.DIFF_UPDATE] = self.update.to_json()
+            except AttributeError:
+                json[API.DIFF_UPDATE] = self.update
         return json
+
+    def __str__(self):
+        return str(self.to_json())
 

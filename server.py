@@ -13,7 +13,7 @@ app = Flask(__name__)
 debug = True
 
 us_code = {}
-us_code = load_diffs() ## Doesn't work if put in run block below.
+us_code = load_diffs(BACKEND.DIFF_SOURCE) ## Doesn't work if put in run block below.
 
 @app.route('/getTitles')
 def getTitles():
