@@ -13,11 +13,14 @@ app = Flask(__name__)
 debug = True
 
 us_code = {}
-us_code = load_diffs(BACKEND.DIFF_SOURCE) ## Doesn't work if put in run block below.
+## Doesn't work if put in run block below.
+us_code = load_us_code(BACKEND.US_CODE_SOURCE)
+us_code = load_diffs(BACKEND.DIFF_SOURCE, us_code)
 
 @app.route('/getTitles')
 def getTitles():
-    return jsonify({API.KEYS.GET_TITLES: us_code.keys()})
+    ## May just want to cache this data.
+    return jsonify({API.KEYS.GET_TITLES: us_code.get_subsection_keys()})
 
 @app.route('/getTitle', methods=['GET'])
 def getTitle():
@@ -30,11 +33,12 @@ def getTitle():
         ## Bad request
         return jsonify(data)
 
-    if data[API.KEYS.TITLE] not in us_code:
-        ## Missing data
+    title_data = us_code.get_subsection(data[API.KEYS.TITLE])
+    if title_data is None:
+        ## Bad request
         return jsonify(data)
-
-    return jsonify(us_code[data[API.KEYS.TITLE]].to_json())
+    
+    return jsonify(title_data.to_json())
 
 @app.route('/getDiffs', methods=['GET', 'POST'])
 def getDiffs():
@@ -48,11 +52,12 @@ def getDiffs():
         ## Bad request
         return jsonify(data)
 
-    if data[API.KEYS.TITLE] not in us_code:
-        ## Missing data
+    title_data = us_code.get_subsection(data[API.KEYS.TITLE])
+    if title_data is None:
+        ## Bad request
         return jsonify(data)
     
-    return jsonify(us_code[12].get_text_at(datetime.datetime.now()).to_json())
+    return jsonify(us_code.get_subsection(12).get_text_at(datetime.datetime.now().date()).to_json())
 
 if __name__ == '__main__':
     # Startup file load goes here.
