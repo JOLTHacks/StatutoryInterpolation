@@ -3,6 +3,8 @@
 from HTMLParser import HTMLParser
 from collections import OrderedDict
 import string
+import re
+import os
 
 
 class USCParser(HTMLParser):
@@ -14,7 +16,7 @@ class USCParser(HTMLParser):
         self.date = ''
 
     def handle_data(self, data):
-        for dstr in data.split():
+        for dstr in re.findall(r"\w+|[^\w\s]", data, re.UNICODE):
             if self.start:
                 self.dict[self.path].append(dstr)
 
@@ -32,28 +34,29 @@ class USCParser(HTMLParser):
 
 
 class Diff:
-    def __init__(self, path='', date='', type='', pos=0, add='', remove=''):
+    def __init__(self, path='', date='', t='', pos=0, add='', remove=''):
         self.path = path
         self.date = date
-        self.type = type
+        self.type = t
         self.pos = pos
         self.add = add
         self.remove = remove
         # self.link = link
 
     def getcsv(self):
-        return ','.join((self.path, self.date, str(self.type), str(self.pos), self.add, self.remove))
+        return '#'.join((self.path, self.date, str(self.type), str(self.pos), self.add, self.remove))
 
 
 class DivisionDiff:
     def __init__(self, d1, d2, key):
+        # TODO: Order q1, q2, dq such that diff is properly ordered.
         self.diffs = []
         self.subdivs = []
 
         l1 = []
         l2 = []
-        sd1 = {}
-        sd2 = {}
+        sd1 = OrderedDict()
+        sd2 = OrderedDict()
         q1 = []
         q2 = []
 
@@ -62,8 +65,10 @@ class DivisionDiff:
             if k.endswith(key):
                 for item in d1[k]:
                     l1.append((k, item))
+            elif 'CHAPTER 44/Sec. 922' in k:
+                continue
             elif key + '/' in k and '/' not in k.split(key + '/')[1]:
-                q1.append(k)
+                q1.append(('', k))
                 sd1[k] = list(d1[k])
             elif key + '/' in k:
                 sd1[k] = list(d1[k])
@@ -71,22 +76,48 @@ class DivisionDiff:
             if k.endswith(key):
                 for item in d2[k]:
                     l2.append((k, item))
+            elif 'CHAPTER 44/Sec. 922' in k:
+                continue
             elif key + '/' in k and '/' not in k.split(key + '/')[1]:
-                q2.append(k)
+                q2.append(('', k))
                 sd2[k] = list(d2[k])
             elif key + '/' in k:
                 sd2[k] = list(d2[k])
 
         self.diffs = diff(l1, l2)
 
-        for k in q2:
-            self.subdivs.append(DivisionDiff(sd1, sd2, k))
+        dq = diff(q1, q2)
+        i = 0
+        j = 0
+
+        while i < len(q1) or j < len(dq):
+            if j < len(dq):
+                if dq[j].split('#')[2] != '+':
+                    j += 1
+                elif int(dq[j].split('#')[3]) <= i:
+                    self.subdivs.append(DivisionDiff(sd1, sd2, dq[j].split('#')[4][1:-1]))
+                    # self.subdivs.append(('', dq[j].split('#')[4][1:-1]))
+                    j += 1
+                else:
+                    # self.subdivs.append(DivisionDiff(sd1, sd2, q1[i]))
+                    if i < len(q1):
+                        self.subdivs.append(DivisionDiff(sd1, sd2, q1[i][1]))
+                        # self.subdivs.append(q1[i])
+                    i += 1
+            else:
+                self.subdivs.append(DivisionDiff(sd1, sd2, q1[i][1]))
+                # self.subdivs.append(q1[i])
+                i += 1
 
     def totaldiff(self):
         ld = list(self.diffs)
         for div in self.subdivs:
             ld.extend(div.totaldiff())
         return ld
+
+    def tdwrite(self, output):
+        for item in self.totaldiff():
+            output.write(item + '\n')
 
 
 def diff(s1, s2):
@@ -100,11 +131,7 @@ def diff(s1, s2):
     maxEdit = n + m
     if maxEdit == 0:
         return []
-    V = []
-    # path = [[[] for y in range(m+1)] for x in range(n+1)]
-    for i in range(-maxEdit, maxEdit+1):
-        V.append(-1)
-    V[maxEdit+1] = 0
+    V = {maxEdit+1: 0}
     trace = []
     done = 0
 
@@ -112,35 +139,33 @@ def diff(s1, s2):
         if done == 1:
             break
 
-        trace.append(list(V))
+        trace.append(dict(V))
 
         for k in range(-D, D+1, 2):
-            if k == -D or (k != D and V[k-1+maxEdit] < V[k+1+maxEdit]):
-                x = V[k+1+maxEdit]
+            if k+1+maxEdit in V:
+                vplus = V[k+1+maxEdit]
+            else:
+                vplus = -1
+            if k-1+maxEdit in V:
+                vminus = V[k-1+maxEdit]
+            else:
+                vminus = -1
+            if k == -D or (k != D and vminus < vplus):
+                x = vplus
                 y = x - k
-                # Add an insertion to the path to the given node
-                # Insertion Format: INS (word) (index of gap into which word must be inserted, starting from 0)
-                # if D != 0 and y - 1 < m:
-                #     path[x][y] = list(path[x][y-1])
                 #     path[x][y].append(Diff(s2[y-1][0], '', 'INS', x, s2[y-1][1], '').getcsv())
             else:
-                x = V[k-1+maxEdit] + 1
+                x = vminus + 1
                 y = x - k
-                # Add a deletion to the path to the given node
-                # Deletion Format: DEL (word) (index of word to be deleted, starting from 1)
-                # if D != 0 and x - 1 < n:
-                #     path[x][y] = list(path[x-1][y])
                 #     path[x][y].append(Diff(s1[x-1][0], '', 'DEL', x, '', s1[x-1][1]).getcsv())
             while x < n and y < m:
                 if s1[x] == s2[y]:
                     x += 1
                     y += 1
-                    # path[x][y] = list(path[x-1][y-1])
                 else:
                     break
             V[k+maxEdit] = x
             if x >= n and y >= m:
-                # print D
                 done = 1
                 break
 
@@ -150,11 +175,23 @@ def diff(s1, s2):
 
     for v in reversed(trace):
         k = x - y
-        if k == -D or (k != D and v[k-1+maxEdit] < v[k+1+maxEdit]):
+        if k+1+maxEdit in v:
+            vplus = v[k+1+maxEdit]
+        else:
+            vplus = -1
+        if k-1+maxEdit in v:
+            vminus = v[k-1+maxEdit]
+        else:
+            vminus = -1
+        if k == -D or (k != D and vminus < vplus):
             pk = k + 1
         else:
             pk = k - 1
-        px = v[pk+maxEdit]
+        if pk+maxEdit in v:
+            vset = v[pk+maxEdit]
+        else:
+            vset = -1
+        px = vset
         py = px - pk
 
         while x > px and y > py:
@@ -162,11 +199,9 @@ def diff(s1, s2):
             y = y - 1
 
         if x > px >= 0:
-            backward.append(Diff(s1[px][0], '', '-', px, '', s1[px][1]).getcsv())
-            x = x - 1
+            backward.append(Diff(s1[px][0], '', '-', px, '""', '"' + s1[px][1] + '"').getcsv())
         elif y > py >= 0:
-            backward.append(Diff(s2[py][0], '', '+', py, s2[py][1], '').getcsv())
-            y = y - 1
+            backward.append(Diff(s2[py][0], '', '+', py, '"' + s2[py][1] + '"', '""').getcsv())
 
         x = px
         y = py
@@ -178,13 +213,13 @@ def diff(s1, s2):
 def parse(fname):
     """Parse an HTML file for a title of the US Code into a dictionary of lists of words organized by path."""
     # TODO: Handle Special Characters
-    # TODO: Separate punctuation and preserve structure
+    # TODO: Preserve structure
     readfile = open(fname, 'r')
     parser = USCParser()
     # parser.feed(parser.unescape(readfile.read()))
     parser.feed(readfile.read())
-    for key in parser.get_dict():
-        print key
+    # for key in parser.get_dict():
+    #     print key
     return parser.get_dict()
 
 
@@ -278,11 +313,37 @@ def divisiondiff(fname1, fname2, div, num):
     return diff(l1, l2)
 
 
-def docdiff(fname1, fname2):
+def docdiff(fname1, fname2, output):
     """Given HTML docs for 2 US Code versions, generate the diff of the 2 versions."""
     d1 = parse(fname1)
     d2 = parse(fname2)
 
-    mydiff = DivisionDiff(d1, d2, '/180/PART III')
-    print(str(len(mydiff.totaldiff())))
-    return mydiff.totaldiff()
+    doc = DivisionDiff(d1, d2, '/180')
+    doc.tdwrite(output)
+
+    #for item in doc.diffs:
+    #    output.write(item + '\n')
+    #output.write('\n')
+    #for div in doc.subdivs:
+    #    print div[1]
+    #    l1 = []
+    #    l2 = []
+    #    if div[1] in d1:
+    #        for item in d1[div[1]]:
+    #            l1.append((div[1], item))
+    #    if div[1] in d2:
+    #        for item in d2[div[1]]:
+    #            l2.append((div[1], item))
+    #    if 'CHAPTER 44/Sec. 922' not in div[1]:
+    #        divdiff = diff(l1, l2)
+    #        for item in divdiff:
+    #            output.write(item + '\n')
+    #        output.write('\n')
+
+
+if __name__ == '__main__':
+    mydir = os.path.dirname(__file__)
+    fn1 = os.path.join(mydir, '..', 'Title 18', 'ver1999.htm')
+    fn2 = os.path.join(mydir, '..', 'Title 18', 'ver2016.htm')
+    fout = open(mydir + '/../diffs/Title 18/test', 'w')
+    docdiff(fn1, fn2, fout)
