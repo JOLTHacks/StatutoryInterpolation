@@ -37,8 +37,68 @@ class Structure():
                          [closest_date], {closest_date: self.texts[closest_date]},
                          {closest_date: self.diffs[closest_date]}, subsections)
 
+    def insert_date(self, date):
+        if len(self.dates) == 0:
+            self.dates.append(date)
+            return 0
+        cmp_ = 0
+        ## Use binary search here eventually. But it's only 10 items so sustainable for now.
+        while date > self.dates[cmp_]:
+            cmp_ += 1
+        if date != self.dates[cmp_]:
+            self.dates.insert(cmp_, date)
+            self.texts[date] = '' ## This could be a list
+            self.diffs[date] = []
+            return -cmp_
+        return cmp_
+
+    ## TODO(kxia): this probably needs to be add_structure_at and be linked to
+    ##   loading structure, but I'm precoding structure for now.
+    def add_text_at(self, path, date, text):
+        if len(path) == 0:
+            self.insert_date(date)
+            self.texts[date] = text
+        else:
+            # Ensure path exists
+            subsection = None
+            for section in self.subsections:
+                if section.order == path[0]:
+                    subsection = section
+                    break
+            if not subsection:
+                self.subsections.append(Structure('TEMP', 'TEMP', path[0]))
+                subsection = self.subsections[-1]
+            # Traverse path
+            subsection.add_text_at(path[1:], date, text)
+
+    def add_diff_at(self, path, date, diff):
+        if len(path) == 0:
+            self.insert_date(date)
+            self.diffs[date].append(diff)
+        else:
+            # Path should always already exist
+            subsection = None
+            for section in self.subsections:
+                if section.order == path[0]:
+                    subsection = section
+                    break
+            # Traverse path
+            subsection.add_diff_at(path[1:], date, diff)
+
     def has_children(self):
         return len(self.subsections) > 0
+
+    def get_subsection_keys(self):
+        return [subsection.order for subsection in self.subsections]
+
+    def get_subsection(self, order):
+        for subsection in self.subsections:
+            if subsection.order == order:
+                return subsection
+        return None
+
+    def has_subsection(self, order):
+        return get_subsection is not None
 
     def has_text(self):
         return len(self.dates) > 0 and len(self.texts) > 0
@@ -70,6 +130,9 @@ class Structure():
             json[API.STRUCTURE_SUBSECTIONS] = subsections
         return json
 
+    def __str__(self):
+        return str(self.to_json())
+
 class Diff():
     def __init__(self, diff_type, position=None, add=None, remove=None, update=None):
         self.diff_type = diff_type
@@ -87,6 +150,13 @@ class Diff():
         if self.remove is not None:
             json[API.DIFF_REMOVE] = self.remove
         if self.update is not None:
-            json[API.DIFF_UPDATE] = self.update.to_json()
+            ## TODO(kxia): update this once the link structure is tied down
+            try:
+                json[API.DIFF_UPDATE] = self.update.to_json()
+            except AttributeError:
+                json[API.DIFF_UPDATE] = self.update
         return json
+
+    def __str__(self):
+        return str(self.to_json())
 
