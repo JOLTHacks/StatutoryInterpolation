@@ -1,36 +1,132 @@
 # StatutoryInterpolation
 # Diff.py
+import os
+import re
+import string
 from HTMLParser import HTMLParser
 from collections import OrderedDict
-import string
-import re
-import os
+
+
+class Division:
+    def __init__(self, name, section, count, parent):
+        self.name = name
+        self.section = section
+        self.subs = []
+        self.count = count
+        self.parent = parent
+
+    def struc_write(self, output, indent):
+        for i in range(0, indent):
+            output.write('\t')
+        output.write('<division name="'+self.name+'" section="'+self.section+'" count='+str(self.count) + '>\n')
+        for sub in self.subs:
+            if type(sub) is tuple:
+                if not re.search('^\w*$', sub[1]):
+                    for i in range(0, indent+1):
+                        output.write('\t')
+                    output.write('<revision date='+sub[0]+'>'+sub[1]+'</revision>\n')
+            else:
+                sub.struc_write(output, indent+1)
+        for i in range(0, indent):
+            output.write('\t')
+        output.write('</division>\n')
+
+    def add_sub(self, name, section, count):
+        self.subs.append(Division(name, section, count, self))
+
+    def add_text(self, text, date, hitspecial):
+        if hitspecial and self.subs:
+            newtext = self.subs[-1][1] + text
+            self.subs.pop()
+            self.subs.append((date, newtext))
+        else:
+            self.subs.append((date, text))
+
+    def sub_count(self):
+        return len(self.subs)
 
 
 class USCParser(HTMLParser):
+    # TODO: Handle tables
+    # TODO: Handle special characters
+    # TODO: Fix count
     def __init__(self):
         HTMLParser.__init__(self)
         self.start = 0
-        self.dict = OrderedDict()
+        self.diffdict = OrderedDict()
+        self.codestruc = Division('complete', '', 0, None)
+        self.active = self.codestruc
         self.path = ''
         self.date = ''
+        self.section = ''
+        self.hitspecial = 0
+        self.htmlclass = ''
+
+    def handle_entityref(self, name):
+        # TODO: Handle special characters
+        self.hitspecial = 1
+
+    def handle_starttag(self, tag, attrs):
+        if not (tag.startswith('h') or tag.startswith('p')):
+            self.hitspecial = 1
+        for item in attrs:
+            if item[0] == 'class':
+                self.htmlclass = item[1]
+
+    def handle_endtag(self, tag):
+        if not (tag.startswith('h') or tag.startswith('p')):
+            self.hitspecial = 1
+        else:
+            self.hitspecial = 0
 
     def handle_data(self, data):
         for dstr in re.findall(r"\w+|[^\w\s]", data, re.UNICODE):
             if self.start:
-                self.dict[self.path].append(dstr)
+                self.diffdict[self.path].append(dstr)
+
+        if self.start:
+            self.active.add_text(data.rstrip(), self.date, self.hitspecial)
+            self.hitspecial = 0
 
     def handle_comment(self, data):
         if 'itempath' in data:
             self.path = data.split(' itempath:')[1].rstrip()
             self.start = 1
-            if self.path not in self.dict:
-                self.dict[self.path] = []
+            if self.path not in self.diffdict:
+                self.diffdict[self.path] = []
+
+            bottom = self.path.split('/')[-1]
+            if 'Sec.' in bottom:
+                name = 'section'
+            elif 'Secs.' in bottom:
+                name = 'sections'
+            elif 'SUBCHAPTER' in bottom:
+                name = 'subchapter'
+            elif 'CHAPTER' in bottom:
+                name = 'chapter'
+            elif 'PART' in bottom:
+                name = 'part'
+            else:
+                name = 'title'
+            while self.active.parent and len(self.path.split('/')) <= len(self.active.section.split('/')):
+                self.active = self.active.parent
+            index = self.active.sub_count()
+            self.active.add_sub(name, self.path, index)
+            self.active = self.active.subs[index]
         if 'currentthrough' in data:
             self.date = data.split('currentthrough:')[1][:8]
+        if 'field-start' in data:
+            index = self.active.sub_count()
+            self.active.add_sub(data.split('field-start:')[1].rstrip(), '', index)
+            self.active = self.active.subs[index]
+        if 'field-end' in data:
+            self.active = self.active.parent
 
-    def get_dict(self):
-        return self.dict
+    def get_diffdict(self):
+        return self.diffdict
+
+    def get_codestruc(self):
+        return self.codestruc
 
 
 class Diff:
@@ -41,9 +137,8 @@ class Diff:
         self.pos = pos
         self.add = add
         self.remove = remove
-        # self.link = link
 
-    def getcsv(self):
+    def get_csv(self):
         return '#'.join((self.path, self.date, str(self.type), str(self.pos), self.add, self.remove))
 
 
@@ -96,17 +191,13 @@ class DivisionDiff:
                     j += 1
                 elif int(dq[j].split('#')[3]) <= i:
                     self.subdivs.append(DivisionDiff(sd1, sd2, dq[j].split('#')[4][1:-1]))
-                    # self.subdivs.append(('', dq[j].split('#')[4][1:-1]))
                     j += 1
                 else:
-                    # self.subdivs.append(DivisionDiff(sd1, sd2, q1[i]))
                     if i < len(q1):
                         self.subdivs.append(DivisionDiff(sd1, sd2, q1[i][1]))
-                        # self.subdivs.append(q1[i])
                     i += 1
             else:
                 self.subdivs.append(DivisionDiff(sd1, sd2, q1[i][1]))
-                # self.subdivs.append(q1[i])
                 i += 1
 
     def totaldiff(self):
@@ -115,7 +206,7 @@ class DivisionDiff:
             ld.extend(div.totaldiff())
         return ld
 
-    def tdwrite(self, output):
+    def td_write(self, output):
         for item in self.totaldiff():
             output.write(item + '\n')
 
@@ -153,11 +244,9 @@ def diff(s1, s2):
             if k == -D or (k != D and vminus < vplus):
                 x = vplus
                 y = x - k
-                #     path[x][y].append(Diff(s2[y-1][0], '', 'INS', x, s2[y-1][1], '').getcsv())
             else:
                 x = vminus + 1
                 y = x - k
-                #     path[x][y].append(Diff(s1[x-1][0], '', 'DEL', x, '', s1[x-1][1]).getcsv())
             while x < n and y < m:
                 if s1[x] == s2[y]:
                     x += 1
@@ -199,9 +288,9 @@ def diff(s1, s2):
             y = y - 1
 
         if x > px >= 0:
-            backward.append(Diff(s1[px][0], '', '-', px, '""', '"' + s1[px][1] + '"').getcsv())
+            backward.append(Diff(s1[px][0], '', '-', px, '""', '"' + s1[px][1] + '"').get_csv())
         elif y > py >= 0:
-            backward.append(Diff(s2[py][0], '', '+', py, '"' + s2[py][1] + '"', '""').getcsv())
+            backward.append(Diff(s2[py][0], '', '+', py, '"' + s2[py][1] + '"', '""').get_csv())
 
         x = px
         y = py
@@ -212,15 +301,12 @@ def diff(s1, s2):
 
 def parse(fname):
     """Parse an HTML file for a title of the US Code into a dictionary of lists of words organized by path."""
-    # TODO: Handle Special Characters
-    # TODO: Preserve structure
+    # TODO: Preserve structure and Added Granularity
     readfile = open(fname, 'r')
     parser = USCParser()
     # parser.feed(parser.unescape(readfile.read()))
     parser.feed(readfile.read())
-    # for key in parser.get_dict():
-    #     print key
-    return parser.get_dict()
+    return parser.get_diffdict()
 
 
 def divisiondiff(fname1, fname2, div, num):
@@ -313,32 +399,26 @@ def divisiondiff(fname1, fname2, div, num):
     return diff(l1, l2)
 
 
-def docdiff(fname1, fname2, output):
+def doc_diff(fname1, fname2, output):
     """Given HTML docs for 2 US Code versions, generate the diff of the 2 versions."""
     d1 = parse(fname1)
     d2 = parse(fname2)
 
     doc = DivisionDiff(d1, d2, '/180')
-    doc.tdwrite(output)
+    doc.td_write(output)
 
-    #for item in doc.diffs:
-    #    output.write(item + '\n')
-    #output.write('\n')
-    #for div in doc.subdivs:
-    #    print div[1]
-    #    l1 = []
-    #    l2 = []
-    #    if div[1] in d1:
-    #        for item in d1[div[1]]:
-    #            l1.append((div[1], item))
-    #    if div[1] in d2:
-    #        for item in d2[div[1]]:
-    #            l2.append((div[1], item))
-    #    if 'CHAPTER 44/Sec. 922' not in div[1]:
-    #        divdiff = diff(l1, l2)
-    #        for item in divdiff:
-    #            output.write(item + '\n')
-    #        output.write('\n')
+
+def codeproduce(fnames, output):
+    """Given a list of versions of the US Code, write a structured compilation of the versions."""
+    codelist = []
+    for fname in fnames:
+        myfile = open(fname, 'r')
+        parser = USCParser()
+        parser.feed(myfile.read())
+        codelist.append((fname.split('\\')[-1], parser.get_codestruc()))
+
+    for struc in codelist:
+        struc[1].struc_write(output, 0)
 
 
 if __name__ == '__main__':
@@ -346,4 +426,5 @@ if __name__ == '__main__':
     fn1 = os.path.join(mydir, '..', 'Title 18', 'ver1999.htm')
     fn2 = os.path.join(mydir, '..', 'Title 18', 'ver2016.htm')
     fout = open(mydir + '/../diffs/Title 18/test', 'w')
-    docdiff(fn1, fn2, fout)
+    codeproduce([fn2], fout)
+    # doc_diff(fn1, fn2, fout)
