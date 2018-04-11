@@ -3,6 +3,7 @@
 import os
 import re
 import string
+import codecs
 from HTMLParser import HTMLParser
 from collections import OrderedDict
 
@@ -21,7 +22,7 @@ class Division:
         output.write('<division name="'+self.name+'" section="'+self.section+'" count='+str(self.count) + '>\n')
         for sub in self.subs:
             if type(sub) is tuple:
-                if not re.search('^\w*$', sub[1]):
+                if not re.search('^\s*$', sub[1]):
                     for i in range(0, indent+1):
                         output.write('\t')
                     output.write('<revision date='+sub[0]+'>'+sub[1]+'</revision>\n')
@@ -47,9 +48,7 @@ class Division:
 
 
 class USCParser(HTMLParser):
-    # TODO: Handle tables
-    # TODO: Handle special characters
-    # TODO: Fix count
+    # TODO: Handle tables/divs
     def __init__(self):
         HTMLParser.__init__(self)
         self.start = 0
@@ -63,7 +62,7 @@ class USCParser(HTMLParser):
         self.htmlclass = ''
 
     def handle_entityref(self, name):
-        # TODO: Handle special characters
+        self.active.add_text(self.unescape('&' + name + ';'), self.date, 1)
         self.hitspecial = 1
 
     def handle_starttag(self, tag, attrs):
@@ -85,7 +84,8 @@ class USCParser(HTMLParser):
                 self.diffdict[self.path].append(dstr)
 
         if self.start:
-            self.active.add_text(data.rstrip(), self.date, self.hitspecial)
+            if not re.search('^\s*$', data):
+                self.active.add_text(data.rstrip(), self.date, self.hitspecial)
             self.hitspecial = 0
 
     def handle_comment(self, data):
@@ -424,7 +424,8 @@ def codeproduce(fnames, output):
 if __name__ == '__main__':
     mydir = os.path.dirname(__file__)
     fn1 = os.path.join(mydir, '..', 'Title 18', 'ver1999.htm')
-    fn2 = os.path.join(mydir, '..', 'Title 18', 'ver2016.htm')
-    fout = open(mydir + '/../diffs/Title 18/test', 'w')
+    # fn2 = os.path.join(mydir, '..', 'Title 18', 'ver2016.htm')
+    fn2 = os.path.join(mydir, '..', 'Title 18', 'Test', 'ch1.htm')
+    fout = codecs.open(mydir + '/../diffs/Title 18/test', 'w', 'utf-8')
     codeproduce([fn2], fout)
     # doc_diff(fn1, fn2, fout)
