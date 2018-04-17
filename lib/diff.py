@@ -9,6 +9,7 @@ from collections import OrderedDict
 
 
 class Division:
+    # TODO: Handle writing of \xef\xbf\xbd characters from ver1999.htm
     def __init__(self, name, section, count, parent):
         self.name = name
         self.section = section
@@ -16,35 +17,52 @@ class Division:
         self.count = count
         self.parent = parent
 
-    def struc_write(self, output, indent):
-        for i in range(0, indent):
-            output.write('\t')
-        output.write('<division name="'+self.name+'" section="'+self.section+'" count='+str(self.count) + '>\n')
+    def div_write(self, indent, output):
+        if self.section == '':
+            for i in range(0, indent):
+                output.write('\t')
+            output.write('<division name="'+self.name+'" section="'+self.section+'" count='+str(self.count) + '>\n')
         for sub in self.subs:
             if type(sub) is tuple:
                 if not re.search('^\s*$', sub[1]):
                     for i in range(0, indent+1):
                         output.write('\t')
                     output.write('<revision date='+sub[0]+'>'+sub[1]+'</revision>\n')
+            elif sub.section != '':
+                sub.div_write(indent+1, output)
             else:
-                sub.struc_write(output, indent+1)
-        for i in range(0, indent):
-            output.write('\t')
-        output.write('</division>\n')
+                sub.div_write(indent+1, output)
+        if self.section == '':
+            for i in range(0, indent):
+                output.write('\t')
+            output.write('</division>\n')
 
     def add_sub(self, name, section, count):
         self.subs.append(Division(name, section, count, self))
 
     def add_text(self, text, date, hitspecial):
         if hitspecial and self.subs:
-            newtext = self.subs[-1][1] + text
-            self.subs.pop()
-            self.subs.append((date, newtext))
+            if type(self.subs[-1]) is tuple:
+                newtext = self.subs[-1][1] + text
+                self.subs.pop()
+                self.subs.append((date, newtext))
+            else:
+                self.subs.append((date, text))
         else:
             self.subs.append((date, text))
 
     def sub_count(self):
         return len(self.subs)
+
+    def sub_list(self):
+        if self.section != '':
+            sublist = [self.section]
+            for sub in self.subs:
+                if type(sub) is not tuple:
+                    sublist = sublist + sub.sub_list()
+            return sublist
+        else:
+            return []
 
 
 class USCParser(HTMLParser):
@@ -53,24 +71,51 @@ class USCParser(HTMLParser):
         HTMLParser.__init__(self)
         self.start = 0
         self.diffdict = OrderedDict()
-        self.codestruc = Division('complete', '', 0, None)
+        self.codestruc = Division('complete', '/', 0, None)
         self.active = self.codestruc
         self.path = ''
         self.date = ''
         self.section = ''
         self.hitspecial = 0
         self.htmlclass = ''
+        self.sub = 0
 
     def handle_entityref(self, name):
         self.active.add_text(self.unescape('&' + name + ';'), self.date, 1)
         self.hitspecial = 1
 
     def handle_starttag(self, tag, attrs):
+        # TODO: Improve on wrong assumption that subdivisions are properly classified with the -#em html class
         if not (tag.startswith('h') or tag.startswith('p')):
             self.hitspecial = 1
         for item in attrs:
             if item[0] == 'class':
                 self.htmlclass = item[1]
+                if item[1].endswith('em'):
+                    em = int(item[1].split('em')[-2][-1])
+                else:
+                    em = 0
+                if self.sub == em and em > 0:
+                    self.active = self.active.parent
+                    index = self.active.sub_count()
+                    subs = ''
+                    for i in range(0, self.sub):
+                        subs = subs + 'sub'
+                    self.active.add_sub(subs + 'division', '', index)
+                    self.active = self.active.subs[index]
+                elif self.sub < em:
+                    while self.sub < em:
+                        index = self.active.sub_count()
+                        subs = ''
+                        for i in range(0, em):
+                            subs = subs + 'sub'
+                        self.active.add_sub(subs + 'division', '', index)
+                        self.active = self.active.subs[index]
+                        self.sub += 1
+                else:
+                    while self.sub > em:
+                        self.active = self.active.parent
+                        self.sub -= 1
 
     def handle_endtag(self, tag):
         if not (tag.startswith('h') or tag.startswith('p')):
@@ -121,6 +166,9 @@ class USCParser(HTMLParser):
             self.active = self.active.subs[index]
         if 'field-end' in data:
             self.active = self.active.parent
+            while self.sub > 0:
+                self.active = self.active.parent
+                self.sub -= 1
 
     def get_diffdict(self):
         return self.diffdict
@@ -288,15 +336,44 @@ def diff(s1, s2):
             y = y - 1
 
         if x > px >= 0:
-            backward.append(Diff(s1[px][0], '', '-', px, '""', '"' + s1[px][1] + '"').get_csv())
+            if type(s1[px]) is tuple:
+                backward.append(Diff(s1[px][0], '', '-', px, '""', '"' + s1[px][1] + '"').get_csv())
+            else:
+                backward.append(Diff('', '', '-', px, '""', '"' + s1[px] + '"').get_csv())
         elif y > py >= 0:
-            backward.append(Diff(s2[py][0], '', '+', py, '"' + s2[py][1] + '"', '""').get_csv())
+            if type(s2[py]) is tuple:
+                backward.append(Diff(s2[py][0], '', '+', py, '"' + s2[py][1] + '"', '""').get_csv())
+            else:
+                backward.append(Diff('', '', '+', py, '"' + s2[py] + '"', '""').get_csv())
 
         x = px
         y = py
 
     path = list(reversed(backward))
     return path
+
+
+def merge(s1, diff):
+    """Given a first list of words and the resulting diff, generate the merged list of words."""
+    i = 0
+    j = 0
+    lmerge = []
+
+    while i < len(s1) or j < len(diff):
+        if j < len(diff):
+            if diff[j].split('#')[2] != '+':
+                j += 1
+            elif int(diff[j].split('#')[3]) <= i:
+                lmerge.append(diff[j].split('#')[4][1:-1])
+                j += 1
+            else:
+                if i < len(s1):
+                    lmerge.append(s1[i])
+                i += 1
+        else:
+            lmerge.append(s1[i])
+            i += 1
+    return lmerge
 
 
 def parse(fname):
@@ -408,24 +485,78 @@ def doc_diff(fname1, fname2, output):
     doc.td_write(output)
 
 
-def codeproduce(fnames, output):
+def code_produce(fnames, output):
     """Given a list of versions of the US Code, write a structured compilation of the versions."""
     codelist = []
+    doclist = []
     for fname in fnames:
         myfile = open(fname, 'r')
         parser = USCParser()
         parser.feed(myfile.read())
         codelist.append((fname.split('\\')[-1], parser.get_codestruc()))
+        doclist.append(parser.get_codestruc().sub_list())
+    if len(doclist) > 0:
+        dmerge = list(doclist[0])
+        for i in range(1, len(doclist)):
+            ddiff = diff(dmerge, doclist[i])
+            dmerge = merge(dmerge, ddiff)
 
-    for struc in codelist:
-        struc[1].struc_write(output, 0)
+        mergedict = {}
+        check_dict = {}
+        for div in dmerge:
+            mergedict[div] = []
+            check_dict[div] = 0
+
+        for struc in codelist:
+            queue = [struc[1]]
+            while queue:
+                mydiv = queue[0]
+                if mydiv.section in mergedict:
+                    mergedict[mydiv.section].append(mydiv)
+                for sub in mydiv.subs:
+                    if type(sub) is not tuple:
+                        queue.append(sub)
+                del queue[0]
+
+        for div in dmerge:
+            code_write(div, mergedict, check_dict, output)
+
+
+def code_write(div, div_dict, check_dict, output):
+    # TODO: Handle count for major divisions
+    if check_dict[div] == 0:
+        check_dict[div] = 1
+        indent = len(div.split('/')) - 2
+        for i in range(0, indent):
+            output.write('\t')
+        output.write('<division name="'+div_dict[div][0].name+'" section='+div+'" count='+'' + '>\n')
+
+        subdivs = []
+        for year in div_dict[div]:
+            for sub in year.subs:
+                if type(sub) is tuple:
+                    if not re.search('^\s*$', sub[1]):
+                        for i in range(0, indent + 1):
+                            output.write('\t')
+                        output.write('<revision date=' + sub[0] + '>' + sub[1] + '</revision>\n')
+                elif sub.section == '':
+                    sub.div_write(indent+1, output)
+                else:
+                    subdivs.append(sub.section)
+
+        for subdiv in subdivs:
+            code_write(subdiv, div_dict, check_dict, output)
+
+        for i in range(0, indent):
+            output.write('\t')
+        output.write('</division>\n')
 
 
 if __name__ == '__main__':
     mydir = os.path.dirname(__file__)
-    fn1 = os.path.join(mydir, '..', 'Title 18', 'ver1999.htm')
-    # fn2 = os.path.join(mydir, '..', 'Title 18', 'ver2016.htm')
-    fn2 = os.path.join(mydir, '..', 'Title 18', 'Test', 'ch1.htm')
+    fn1 = os.path.join(mydir, '..', 'Title 18', 'ver2012.htm')
+    fn2 = os.path.join(mydir, '..', 'Title 18', 'ver2016.htm')
+    # fn2 = os.path.join(mydir, '..', 'Title 18', 'Test', 'ch1.htm')
     fout = codecs.open(mydir + '/../diffs/Title 18/test', 'w', 'utf-8')
-    codeproduce([fn2], fout)
+    code_produce([fn1, fn2], fout)
     # doc_diff(fn1, fn2, fout)
