@@ -11,31 +11,33 @@ from collections import OrderedDict
 class Division:
     # TODO: Handle writing of \xef\xbf\xbd characters from ver1999.htm
     def __init__(self, name, section, count, parent):
-        self.name = name
-        self.section = section
-        self.subs = []
-        self.count = count
-        self.parent = parent
+        self.name = name  # The type of the division
+        self.section = section  # If a major division, the path to the division; otherwise, blank or the value in a list
+        self.subs = []  # The list of subcomponents belonging to the division
+        self.count = count  # The placement of the division within its parent's list of subdivisions
+        self.parent = parent  # The parent division
 
     def div_write(self, indent, output):
-        if self.section == '':
-            for i in range(0, indent):
-                output.write('\t')
-            output.write('<division name="'+self.name+'" section="'+self.section+'" count='+str(self.count) + '>\n')
-        for sub in self.subs:
-            if type(sub) is tuple:
-                if not re.search('^\s*$', sub[1]):
-                    for i in range(0, indent+1):
-                        output.write('\t')
-                    output.write('<revision date='+sub[0]+'>'+sub[1]+'</revision>\n')
-            elif sub.section != '':
-                sub.div_write(indent+1, output)
-            else:
-                sub.div_write(indent+1, output)
-        if self.section == '':
-            for i in range(0, indent):
-                output.write('\t')
-            output.write('</division>\n')
+        important = ['complete', 'title', 'statute', 'section', 'sections', 'chapter', 'subchapter']
+        if self.name in important or 'division' in self.name or 'head' in self.name:
+            if self.section == '':
+                for i in range(0, indent):
+                    output.write('\t')
+                output.write('<division name="'+self.name+'" section="'+self.section+'" count='+str(self.count) + '>\n')
+            for sub in self.subs:
+                if type(sub) is tuple:
+                    if not re.search('^\s*$', sub[1]):
+                        for i in range(0, indent+1):
+                            output.write('\t')
+                        output.write('<revision date='+sub[0]+'>'+sub[1]+'</revision>\n')
+                elif sub.section != '':
+                    sub.div_write(indent+1, output)
+                else:
+                    sub.div_write(indent+1, output)
+            if self.section == '':
+                for i in range(0, indent):
+                    output.write('\t')
+                output.write('</division>\n')
 
     def add_sub(self, name, section, count):
         self.subs.append(Division(name, section, count, self))
@@ -79,13 +81,19 @@ class USCParser(HTMLParser):
         self.hitspecial = 0
         self.htmlclass = ''
         self.sub = 0
+        self.intext = 0
 
     def handle_entityref(self, name):
         self.active.add_text(self.unescape('&' + name + ';'), self.date, 1)
         self.hitspecial = 1
 
+    def handle_charref(self, name):
+        self.active.add_text(self.unescape('&#' + name + ';'), self.date, 1)
+        self.hitspecial = 1
+
     def handle_starttag(self, tag, attrs):
         # TODO: Improve on wrong assumption that subdivisions are properly classified with the -#em html class
+        self.intext += 1
         if not (tag.startswith('h') or tag.startswith('p')):
             self.hitspecial = 1
         for item in attrs:
@@ -118,6 +126,7 @@ class USCParser(HTMLParser):
                         self.sub -= 1
 
     def handle_endtag(self, tag):
+        self.intext -= 1
         if not (tag.startswith('h') or tag.startswith('p')):
             self.hitspecial = 1
         else:
@@ -169,6 +178,8 @@ class USCParser(HTMLParser):
             while self.sub > 0:
                 self.active = self.active.parent
                 self.sub -= 1
+        if 'PDFPage' in data and self.intext > 0:
+            self.hitspecial = 1
 
     def get_diffdict(self):
         return self.diffdict
@@ -524,12 +535,13 @@ def code_produce(fnames, output):
 
 def code_write(div, div_dict, check_dict, output):
     # TODO: Handle count for major divisions
-    if check_dict[div] == 0:
+    important = ['complete', 'title', 'statute', 'section', 'sections', 'chapter', 'subchapter']
+    if check_dict[div] == 0 and (div_dict[div][0].name in important or 'division' in div_dict[div][0].name or 'head' in div_dict[div][0].name):
         check_dict[div] = 1
         indent = len(div.split('/')) - 2
         for i in range(0, indent):
             output.write('\t')
-        output.write('<division name="'+div_dict[div][0].name+'" section='+div+'" count='+'' + '>\n')
+        output.write('<division name="'+div_dict[div][0].name+'" section="'+div+'" count='+'' + '>\n')
 
         subdivs = []
         for year in div_dict[div]:
@@ -555,8 +567,11 @@ def code_write(div, div_dict, check_dict, output):
 if __name__ == '__main__':
     mydir = os.path.dirname(__file__)
     fn1 = os.path.join(mydir, '..', 'Title 18', 'ver2012.htm')
-    fn2 = os.path.join(mydir, '..', 'Title 18', 'ver2016.htm')
-    # fn2 = os.path.join(mydir, '..', 'Title 18', 'Test', 'ch1.htm')
-    fout = codecs.open(mydir + '/../diffs/Title 18/test', 'w', 'utf-8')
-    code_produce([fn1, fn2], fout)
-    # doc_diff(fn1, fn2, fout)
+    fn2 = os.path.join(mydir, '..', 'Title 18', 'ver2013.htm')
+    fn3 = os.path.join(mydir, '..', 'Title 18', 'ver2014.htm')
+    fn4 = os.path.join(mydir, '..', 'Title 18', 'ver2015.htm')
+    fn5 = os.path.join(mydir, '..', 'Title 18', 'ver2016.htm')
+    fout1 = codecs.open(mydir + '/../diffs/Title 18/testcode', 'w', 'utf-8')
+    fout2 = codecs.open(mydir + '/../diffs/Title 18/testdiff', 'w', 'utf-8')
+    code_produce([fn1, fn2, fn3, fn4, fn5], fout1)
+    # doc_diff(fn1, fn2, fout2)
