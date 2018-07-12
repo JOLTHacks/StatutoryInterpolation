@@ -4,6 +4,7 @@ import os
 import re
 import string
 import codecs
+import roman
 from HTMLParser import HTMLParser
 from collections import OrderedDict
 
@@ -20,7 +21,7 @@ class Division:
     def div_write(self, indent, output):
         important = ['complete', 'title', 'statute', 'section', 'sections', 'chapter', 'subchapter']
         if self.name in important or 'division' in self.name or 'head' in self.name:
-            if self.section == '':
+            if '/' not in self.section:
                 for i in range(0, indent):
                     output.write('\t')
                 output.write('<division name="'+self.name+'" section="'+self.section+'" count='+str(self.count) + '>\n')
@@ -30,11 +31,11 @@ class Division:
                         for i in range(0, indent+1):
                             output.write('\t')
                         output.write('<revision date='+sub[0]+'>'+sub[1]+'</revision>\n')
-                elif sub.section != '':
+                elif '/' in sub.section:
                     sub.div_write(indent+1, output)
                 else:
                     sub.div_write(indent+1, output)
-            if self.section == '':
+            if '/' not in self.section:
                 for i in range(0, indent):
                     output.write('\t')
                 output.write('</division>\n')
@@ -57,7 +58,7 @@ class Division:
         return len(self.subs)
 
     def sub_list(self):
-        if self.section != '':
+        if '/' in self.section:
             sublist = [self.section]
             for sub in self.subs:
                 if type(sub) is not tuple:
@@ -79,9 +80,15 @@ class USCParser(HTMLParser):
         self.date = ''
         self.section = ''
         self.hitspecial = 0
-        self.htmlclass = ''
         self.sub = 0
+        self.layering = []
         self.intext = 0
+        self.lower = ''
+        self.number = 0
+        self.upper = ''
+        self.roman = ''
+        self.upperroman = ''
+        self.double = ''
 
     def handle_entityref(self, name):
         self.active.add_text(self.unescape('&' + name + ';'), self.date, 1)
@@ -92,38 +99,9 @@ class USCParser(HTMLParser):
         self.hitspecial = 1
 
     def handle_starttag(self, tag, attrs):
-        # TODO: Improve on wrong assumption that subdivisions are properly classified with the -#em html class
         self.intext += 1
         if not (tag.startswith('h') or tag.startswith('p')):
             self.hitspecial = 1
-        for item in attrs:
-            if item[0] == 'class':
-                self.htmlclass = item[1]
-                if item[1].endswith('em'):
-                    em = int(item[1].split('em')[-2][-1])
-                else:
-                    em = 0
-                if self.sub == em and em > 0:
-                    self.active = self.active.parent
-                    index = self.active.sub_count()
-                    subs = ''
-                    for i in range(0, self.sub):
-                        subs = subs + 'sub'
-                    self.active.add_sub(subs + 'division', '', index)
-                    self.active = self.active.subs[index]
-                elif self.sub < em:
-                    while self.sub < em:
-                        index = self.active.sub_count()
-                        subs = ''
-                        for i in range(0, em):
-                            subs = subs + 'sub'
-                        self.active.add_sub(subs + 'division', '', index)
-                        self.active = self.active.subs[index]
-                        self.sub += 1
-                else:
-                    while self.sub > em:
-                        self.active = self.active.parent
-                        self.sub -= 1
 
     def handle_endtag(self, tag):
         self.intext -= 1
@@ -133,13 +111,193 @@ class USCParser(HTMLParser):
             self.hitspecial = 0
 
     def handle_data(self, data):
+        # TODO: Find a better way to handle the inconsistencies in Sec. 2510
         for dstr in re.findall(r"\w+|[^\w\s]", data, re.UNICODE):
             if self.start:
                 self.diffdict[self.path].append(dstr)
 
-        if self.start:
+        if self.start and 'Sec. 2510' not in self.path:
             if not re.search('^\s*$', data):
-                self.active.add_text(data.rstrip(), self.date, self.hitspecial)
+                dstr = data.lstrip()
+                while re.search('^\(\w\w?\w?\w?\w?\w?\w?\)', dstr):  # and not self.hitspecial:
+                    section = dstr.split(')', 1)[0][1:]
+                    dstr = dstr.split(')', 1)[1].lstrip()
+                    name = ''
+                    index_type = ''
+                    # ASSUME: Roman numeral xl or XL is never reached
+                    # ASSUME: Double letter ii or II is never reached
+                    if section in string.letters:
+                        if section in string.ascii_lowercase:
+                            if section not in ['i', 'v', 'x']:
+                                # The only possible roman numeral characters are assumed to be ivx
+                                index_type = 'lower'
+                            elif section == 'i':
+                                # The letter i must follow h and the roman numeral i must follow ''
+                                if self.lower != 'h':
+                                    index_type = 'roman'
+                                elif self.roman != '':
+                                    index_type = 'lower'
+                                elif 'roman' in self.layering:
+                                    # A layer must be at max depth or at same depth at which it occurred previously
+                                    if self.layering.index('roman') != self.sub:
+                                        index_type = 'lower'
+                                    else:
+                                        index_type = 'roman'
+                                elif self.sub == len(self.layering):
+                                    # If ambiguous and at max depth, roman numerals are likelier to occur
+                                    index_type = 'roman'
+                                else:
+                                    # When all else fails, guess lower
+                                    index_type = 'lower'
+                            elif section == 'v':
+                                # Assumes that we need not consider case where both u and iv are most recent index
+                                if self.lower != 'u':
+                                    index_type = 'roman'
+                                elif self.roman != 'iv':
+                                    index_type = 'lower'
+                            elif section == 'x':
+                                # Assumes that we need not consider case where both w and ix are most recent index
+                                if self.lower != 'w':
+                                    index_type = 'roman'
+                                elif self.roman != 'ix':
+                                    index_type = 'lower'
+                        if section in string.ascii_uppercase:
+                            # See above for more detailed explanation of distinguishing procedure
+                            if section not in ['I', 'V', 'X']:
+                                index_type = 'upper'
+                            elif section == 'I':
+                                if self.upper != 'H':
+                                    index_type = 'upperroman'
+                                elif self.upperroman != '':
+                                    index_type = 'upper'
+                                elif 'upperroman' in self.layering:
+                                    if self.layering.index('upperroman') != self.sub:
+                                        index_type = 'upper'
+                                    else:
+                                        index_type = 'upperroman'
+                                elif self.sub == len(self.layering):
+                                    index_type = 'upperroman'
+                                else:
+                                    index_type = 'upper'
+                            elif section == 'V':
+                                if self.upper != 'U':
+                                    index_type = 'upperroman'
+                                elif self.upperroman != 'IV':
+                                    index_type = 'upper'
+                            elif section == 'X':
+                                if self.upper != 'W':
+                                    index_type = 'upperroman'
+                                elif self.upperroman != 'IX':
+                                    index_type = 'upper'
+                    elif section.isdigit():
+                        # Numbers are easy
+                        index_type = 'number'
+                    else:
+                        for char in section:
+                            # As before, assume the only roman numeral characters are ivx
+                            if char not in ['i', 'v', 'x', 'I', 'V', 'X']:
+                                index_type = 'double'
+                        if index_type == '':
+                            # A double index must have length two
+                            if len(section) > 2 or self.double not in ['hh', 'HH', 'uu', 'UU', 'ww', 'WW']:
+                                if section[0] in string.ascii_uppercase:
+                                    index_type = 'upperroman'
+                                else:
+                                    index_type = 'roman'
+                            elif section[0] in string.ascii_uppercase:
+                                index_type = 'upperroman'
+                            else:
+                                # Assumes we never get to double index ii or II
+                                index_type = 'roman'
+
+                    seq_ok = False  # seq_ok checks whether we have a valid index in the leading parentheses
+                    # Switch on the index_type, performing a type-specific check that the character sequence is correct
+                    if index_type == '':
+                        print 'ERROR ' + section
+                    elif index_type == 'lower':
+                        if self.lower == '' and section == 'a':
+                            seq_ok = True
+                            self.lower = section
+                        elif self.lower != '':
+                            if ord(self.lower) + 1 == ord(section):
+                                seq_ok = True
+                                self.lower = section
+                    elif index_type == 'number':
+                        if self.number + 1 == int(section):
+                            seq_ok = True
+                            self.number = int(section)
+                    elif index_type == 'upper':
+                        if self.upper == '' and section == 'A':
+                            seq_ok = True
+                            self.upper = section
+                        elif self.upper != '':
+                            if ord(self.upper) + 1 == ord(section):
+                                seq_ok = True
+                                self.upper = section
+                    elif index_type == 'roman':
+                        if self.roman == '' and section == 'i':
+                            seq_ok = True
+                            self.roman = section
+                        elif self.roman != '':
+                            if roman.fromRoman(self.roman.upper()) + 1 == roman.fromRoman(section.upper()):
+                                seq_ok = True
+                                self.roman = section
+                    elif index_type == 'upperroman':
+                        if self.upperroman == '' and section == 'i':
+                            seq_ok = True
+                            self.upperroman = section
+                        elif self.upperroman != '':
+                            if roman.fromRoman(self.upperroman) + 1 == roman.fromRoman(section):
+                                seq_ok = True
+                                self.upperroman = section
+                    elif index_type == 'double':
+                        if self.double == '' and section == 'aa':
+                            seq_ok = True
+                            self.double = section
+                        elif self.double != '':
+                            if ord(self.double[0]) + 1 == ord(section[0]):
+                                seq_ok = True
+                                self.double = section
+
+                    if seq_ok:
+                        # Find the appropriate layer to which the division belongs
+                        if index_type in self.layering:
+                            depth = self.layering.index(index_type) + 1
+                        else:
+                            self.layering.append(index_type)
+                            depth = self.layering.index(index_type) + 1
+
+                        while depth < self.sub:
+                            # If retreating to a former depth, reset the later layer's index
+                            last = self.layering[self.sub - 1]
+                            if last == 'lower':
+                                self.lower = ''
+                            elif last == 'number':
+                                self.number = 0
+                            elif last == 'upper':
+                                self.upper = ''
+                            elif last == 'roman':
+                                self.roman = ''
+                            elif last == 'upperroman':
+                                self.upperroman = ''
+                            elif last == 'double':
+                                self.double = ''
+                            self.active = self.active.parent
+                            self.sub -= 1
+                        while depth == self.sub:
+                            self.active = self.active.parent
+                            self.sub -= 1
+                        self.sub = depth
+                        for i in range(0, self.sub):
+                            name += 'sub'
+                        name += 'division'
+                        index = self.active.sub_count()
+                        self.active.add_sub(name, section, index)
+                        self.active = self.active.subs[index]
+                    else:
+                        self.active.add_text(dstr.rstrip(), self.date, self.hitspecial)
+                else:
+                    self.active.add_text(dstr.rstrip(), self.date, self.hitspecial)
             self.hitspecial = 0
 
     def handle_comment(self, data):
@@ -162,6 +320,7 @@ class USCParser(HTMLParser):
                 name = 'part'
             else:
                 name = 'title'
+            print self.path
             while self.active.parent and len(self.path.split('/')) <= len(self.active.section.split('/')):
                 self.active = self.active.parent
             index = self.active.sub_count()
@@ -178,6 +337,13 @@ class USCParser(HTMLParser):
             while self.sub > 0:
                 self.active = self.active.parent
                 self.sub -= 1
+            self.layering = []
+            self.lower = ''
+            self.number = 0
+            self.upper = ''
+            self.roman = ''
+            self.upperroman = ''
+            self.double = ''
         if 'PDFPage' in data and self.intext > 0:
             self.hitspecial = 1
 
@@ -203,7 +369,6 @@ class Diff:
 
 class DivisionDiff:
     def __init__(self, d1, d2, key):
-        # TODO: Order q1, q2, dq such that diff is properly ordered.
         self.diffs = []
         self.subdivs = []
 
@@ -389,7 +554,6 @@ def merge(s1, diff):
 
 def parse(fname):
     """Parse an HTML file for a title of the US Code into a dictionary of lists of words organized by path."""
-    # TODO: Preserve structure and Added Granularity
     readfile = open(fname, 'r')
     parser = USCParser()
     # parser.feed(parser.unescape(readfile.read()))
@@ -534,7 +698,9 @@ def code_produce(fnames, output):
 
 
 def code_write(div, div_dict, check_dict, output):
+    """Iterate over the structure of the subdivisions of the US Code to produce a well-structured version"""
     # TODO: Handle count for major divisions
+    # Important stores the various major divisions within the structure of the code
     important = ['complete', 'title', 'statute', 'section', 'sections', 'chapter', 'subchapter']
     if check_dict[div] == 0 and (div_dict[div][0].name in important or 'division' in div_dict[div][0].name or 'head' in div_dict[div][0].name):
         check_dict[div] = 1
@@ -551,7 +717,7 @@ def code_write(div, div_dict, check_dict, output):
                         for i in range(0, indent + 1):
                             output.write('\t')
                         output.write('<revision date=' + sub[0] + '>' + sub[1] + '</revision>\n')
-                elif sub.section == '':
+                elif '/' not in sub.section:
                     sub.div_write(indent+1, output)
                 else:
                     subdivs.append(sub.section)
@@ -574,4 +740,4 @@ if __name__ == '__main__':
     fout1 = codecs.open(mydir + '/../diffs/Title 18/testcode', 'w', 'utf-8')
     fout2 = codecs.open(mydir + '/../diffs/Title 18/testdiff', 'w', 'utf-8')
     code_produce([fn1, fn2, fn3, fn4, fn5], fout1)
-    # doc_diff(fn1, fn2, fout2)
+    doc_diff(fn1, fn2, fout2)
