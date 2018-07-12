@@ -20,7 +20,7 @@ us_code = load_diffs(BACKEND.DIFF_SOURCE, us_code)
 @app.route('/getTitles')
 def getTitles():
     ## May just want to cache this data.
-    return jsonify({API.KEYS.GET_TITLES: us_code.get_subsection_keys()})
+    return json.dumps({API.KEYS.GET_TITLES: us_code.get_subsection_keys()})
 
 @app.route('/getTitle', methods=['GET'])
 def getTitle():
@@ -31,14 +31,14 @@ def getTitle():
 
     if API.KEYS.TITLE not in data:
         ## Bad request
-        return jsonify(data)
+        return json.dumps(data)
 
     title_data = us_code.get_subsection(data[API.KEYS.TITLE])
     if title_data is None:
         ## Bad request
-        return jsonify(data)
+        return json.dumps(data)
     
-    return jsonify(title_data.to_json())
+    return json.dumps(title_data.to_json())
 
 @app.route('/getDiffs', methods=['GET', 'POST'])
 def getDiffs():
@@ -50,14 +50,14 @@ def getDiffs():
 
     if API.KEYS.TITLE not in data:
         ## Bad request
-        return jsonify(data)
+        return json.dumps(data)
 
     title_data = us_code.get_subsection(data[API.KEYS.TITLE])
     if title_data is None:
         ## Bad request
-        return jsonify(data)
+        return json.dumps(data)
     
-    return jsonify(us_code.get_subsection(12).get_text_at(datetime.datetime.now().date()).to_json())
+    return json.dumps(us_code.get_subsection(12).get_text_at(datetime.datetime.now().date()).to_json())
 
 if __name__ == '__main__':
     # Startup file load goes here.

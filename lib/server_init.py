@@ -8,7 +8,7 @@ def load_us_code(src):
     file_ = open(src, 'r')
     file_.close()
     mar1 = datetime.date(2018, 3, 1)
-    structure = Structure('Title', '12', 12,
+    structure = Structure('Title', '18', 18,
                           subsections=[Structure('Section', '2', 2,
                                                  dates=[mar1],
                                                  texts={mar1:''},
