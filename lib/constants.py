@@ -37,5 +37,5 @@ class API:
 class BACKEND:
     ## TODO(bgunning): replace this with whatever delimiter makes sense.
     DIFF_SOURCE = 'data/diffs.csv'
-    US_CODE_PATH_DELIMITER = '#'
+    US_CODE_PATH_DELIMITER = '.'
     US_CODE_SOURCE = 'data/diffs.csv'
