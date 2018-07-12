@@ -17,12 +17,12 @@ us_code = {}
 us_code = load_us_code(BACKEND.US_CODE_SOURCE)
 us_code = load_diffs(BACKEND.DIFF_SOURCE, us_code)
 
-@app.route('/getTitles')
+@app.route('/getTitles', methods=['GET'])
 def getTitles():
     ## May just want to cache this data.
     return json.dumps({API.KEYS.GET_TITLES: us_code.get_subsection_keys()})
 
-@app.route('/getTitle', methods=['GET'])
+@app.route('/getTitle', methods=['POST'])
 def getTitle():
     try:
         data = json.loads(request.data)
